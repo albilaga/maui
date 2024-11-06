@@ -10,6 +10,7 @@ var vsVersion = GetBuildVariable("VS", "");
 string MSBuildExe = Argument("msbuild", EnvironmentVariable("MSBUILD_EXE", ""));
 string nugetSource = Argument("nugetsource", "");
 string officialBuildId = Argument("officialbuildid", "");
+string packageVersion = Argument("packageVersion", "");
 
 string testFilter = Argument("test-filter", EnvironmentVariable("TEST_FILTER"));
 
@@ -45,7 +46,7 @@ Task("dotnet")
     .Description("Provisions the .NET SDK into bin/dotnet based on eng/Versions.props")
     .Does(() =>
     {
-        if (!localDotnet) 
+        if (!localDotnet)
             return;
 
         //We are passing a nuget folder with nuget locations
@@ -66,7 +67,7 @@ Task("dotnet")
 
         DotNetTool("tool",  new DotNetToolSettings {
 		    ToolPath = dotnetPath,
-		    DiagnosticOutput = true,	
+		    DiagnosticOutput = true,
 		    ArgumentCustomization = args => args.Append("restore")
 	    });
     });
@@ -74,9 +75,9 @@ Task("dotnet")
 Task("dotnet-local-workloads")
     .Does(() =>
     {
-        if (!localDotnet) 
+        if (!localDotnet)
             return;
-        
+
         DotNetBuild("./src/DotNet/DotNet.csproj", new DotNetBuildSettings
         {
             MSBuildSettings = new DotNetMSBuildSettings()
@@ -96,7 +97,7 @@ Task("dotnet-local-workloads")
 
         DotNetTool("tool",  new DotNetToolSettings {
 		    ToolPath = dotnetPath,
-		    DiagnosticOutput = true,	
+		    DiagnosticOutput = true,
 		    ArgumentCustomization = args => args.Append("restore")
 	    });
     });
@@ -261,7 +262,7 @@ Task("dotnet-test")
 
         foreach (var test in tests)
         {
-            if (!IsRunningOnWindows() && (test.Contains("Compatibility.Core.UnitTests") || test.Contains("Controls.Core.Design.UnitTests"))) 
+            if (!IsRunningOnWindows() && (test.Contains("Compatibility.Core.UnitTests") || test.Contains("Controls.Core.Design.UnitTests")))
             {
                 continue;
             }
@@ -299,16 +300,21 @@ Task("dotnet-pack-maui")
         var sln = "./Microsoft.Maui.Packages.slnf";
         if (!IsRunningOnWindows())
             sln = "./Microsoft.Maui.Packages-mac.slnf";
- 
+
         if(string.IsNullOrEmpty(officialBuildId))
         {
             officialBuildId = DateTime.UtcNow.ToString("yyyyMMdd.1");
         }
 
+        if(string.IsNullOrEmpty(packageVersion))
+        {
+            packageVersion = "8.0.93-dev";
+        }
+
         RunMSBuildWithDotNet(sln, target: "Pack", properties: new Dictionary<string, string>
         {
             { "SymbolPackageFormat", "snupkg" },
-            { "OfficialBuildId", officialBuildId },
+            { "PackageVersion", packageVersion + "." + officialBuildId },
         });
     });
 
@@ -507,7 +513,7 @@ Task("VS")
     .IsDependentOn("Clean")
     .IsDependentOn("dotnet")
     .IsDependentOn("dotnet-buildtasks")
-    .IsDependentOn("dotnet-pack") // Run conditionally 
+    .IsDependentOn("dotnet-pack") // Run conditionally
     .Does(() =>
     {
         if (pendingException != null)
@@ -519,7 +525,7 @@ Task("VS")
         UseLocalNuGetCacheFolder();
 
         StartVisualStudioForDotNet();
-    }); 
+    });
 
 
 bool RunPackTarget()
@@ -535,7 +541,7 @@ bool RunPackTarget()
     // Does the user want to run a pack as part of a different target?
     if (HasArgument("pack") && Argument<string>("pack", "true") != "false")
         return true;
-        
+
     // If the request is to open a different sln then let's see if pack has ever run
     // if it hasn't then lets pack maui so the sln will open
     if (Argument<string>("sln", null) != null)
@@ -571,7 +577,7 @@ Dictionary<string, string> GetDotNetEnvironmentVariables()
 void SetDotNetEnvironmentVariables()
 {
     var dotnet = MakeAbsolute(Directory("./bin/dotnet/")).ToString();
-    
+
     SetEnvironmentVariable("DOTNET_INSTALL_DIR", dotnet);
     SetEnvironmentVariable("DOTNET_ROOT", dotnet);
     SetEnvironmentVariable("DOTNET_MSBUILD_SDK_RESOLVER_CLI_DIR", dotnet);
@@ -655,12 +661,12 @@ void StartVisualStudioForDotNet()
         var vsLatest = VSWhereLatest(new VSWhereLatestSettings { IncludePrerelease = includePrerelease, });
         if (vsLatest == null)
             throw new Exception("Unable to find Visual Studio!");
-    
+
         StartProcess(vsLatest.CombineWithFilePath("./Common7/IDE/devenv.exe"), sln);
     }
     else
     {
-       
+
         StartProcess("open", new ProcessSettings{ Arguments = sln, EnvironmentVariables = GetDotNetEnvironmentVariables() });
     }
 }
@@ -685,7 +691,7 @@ void RunMSBuildWithDotNet(
     var binlog = string.IsNullOrEmpty(targetFramework) ?
         $"\"{GetLogDirectory()}/{binlogPrefix}{name}-{configuration}-{target}-{type}-{DateTime.UtcNow.ToFileTimeUtc()}.binlog\"" :
         $"\"{GetLogDirectory()}/{binlogPrefix}{name}-{configuration}-{target}-{targetFramework}-{type}-{DateTime.UtcNow.ToFileTimeUtc()}.binlog\"";
-    
+
     if(localDotnet)
         SetDotNetEnvironmentVariables();
 
@@ -749,7 +755,7 @@ void RunTestWithLocalDotNet(string csproj, string config, string pathDotnet = nu
 
     if (!string.IsNullOrWhiteSpace(filter))
     {
-        Information("Run Tests With Filter {0}", filter);	
+        Information("Run Tests With Filter {0}", filter);
     }
 
     string binlog;
@@ -760,7 +766,7 @@ void RunTestWithLocalDotNet(string csproj, string config, string pathDotnet = nu
     if (string.IsNullOrWhiteSpace(resultsFileNameWithoutExtension))
     {
         binlog = $"{logDirectory}/{name}-{config}.binlog";
-        results = $"{name}-{config}.trx";   
+        results = $"{name}-{config}.trx";
     }
     else
     {
@@ -775,14 +781,14 @@ void RunTestWithLocalDotNet(string csproj, string config, string pathDotnet = nu
             Configuration = config,
             NoBuild = noBuild,
             Filter = filter,
-            Loggers = { 
+            Loggers = {
                 $"trx;LogFileName={results}",
                 $"console;verbosity=normal"
-            }, 
+            },
            	ResultsDirectory = GetTestResultsDirectory(),
             //Verbosity = Cake.Common.Tools.DotNetCore.DotNetCoreVerbosity.Diagnostic,
-            ArgumentCustomization = args => 
-            { 
+            ArgumentCustomization = args =>
+            {
                 args.Append($"-bl:{binlog}");
                // args.Append($"/tl");
                 if(argsExtra != null)
@@ -795,7 +801,7 @@ void RunTestWithLocalDotNet(string csproj, string config, string pathDotnet = nu
                 return args;
             }
         };
-    
+
     if(!string.IsNullOrEmpty(pathDotnet))
     {
         settings.ToolPath = pathDotnet;

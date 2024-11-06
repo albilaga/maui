@@ -42,7 +42,9 @@ namespace Microsoft.Maui
 
 				var name = cgFont.PostScriptName;
 
+#pragma warning disable CA1422
 				if (CTFontManager.RegisterGraphicsFont(cgFont, out var error))
+#pragma warning restore CA1422
 					return name;
 
 				var uiFont = UIFont.FromName(name, 10);
