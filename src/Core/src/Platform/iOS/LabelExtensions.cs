@@ -1,3 +1,4 @@
+using System;
 using Foundation;
 using Microsoft.Maui.Graphics;
 using ObjCRuntime;
@@ -86,9 +87,21 @@ namespace Microsoft.Maui.Platform
 				StringEncoding = NSStringEncoding.UTF8
 #endif
 			};
+			
+			var fontManager = label?.Handler?.GetRequiredService<IFontManager>();
+			var regularFont = fontManager?.GetFont(label!.Font, UIFont.LabelFontSize);
+			UIFont? boldFont = null;
 
-			var uiFontAttribute = label?.Handler?.GetRequiredService<IFontManager>()?.GetFont(label.Font, UIFont.LabelFontSize);
-
+			if (label!.Font.Family != null)
+			{
+				var boldFontName = label.Font.Family.Replace("Regular", "Bold", StringComparison.Ordinal);
+				boldFont = UIFont.FromName(boldFontName, (nfloat)(label?.Font.Size ?? UIFont.LabelFontSize));
+				if (boldFont == null) // Fallback to regular font if bold variant is not available
+				{
+					boldFont = regularFont;
+				}
+			}
+			
 			NSError nsError = new();
 			var attributedString = new NSMutableAttributedString(new NSAttributedString(text, attr, ref nsError));
 
@@ -96,18 +109,22 @@ namespace Microsoft.Maui.Platform
 			attributedString.EnumerateAttributes(new NSRange(0, attributedString.Length), NSAttributedStringEnumeration.None,
 				(NSDictionary attrs, NSRange range, ref bool stop) =>
 				{
-					if (label!.Font.Family == null)
+					var font = attrs[UIStringAttributeKey.Font] as UIFont;
+					if (font != null)
 					{
-						var font = attrs[UIStringAttributeKey.Font] as UIFont;
-						if (font != null)
+						if (font.FontDescriptor.SymbolicTraits.HasFlag(UIFontDescriptorSymbolicTraits.Bold) && boldFont != null)
+						{
+							attributedString.AddAttribute(UIStringAttributeKey.Font, boldFont, range);
+						}
+						else if (label!.Font.Family == null) // Update size only if no custom font family
 						{
 							font = font.WithSize((nfloat)(label?.Font.Size ?? UIFont.LabelFontSize));
 							attributedString.AddAttribute(UIStringAttributeKey.Font, font, range);
 						}
-					}
-					else if (uiFontAttribute != null)
-					{
-						attributedString.AddAttribute(UIStringAttributeKey.Font, uiFontAttribute, range);
+						else if (regularFont != null)
+						{
+							attributedString.AddAttribute(UIStringAttributeKey.Font, regularFont, range);
+						}
 					}
 
 					if(label?.TextColor != null)
